@@ -169,12 +169,14 @@ async function main() {
     // instantiateWasm,
     onRuntimeInitialized: () => {
       runtimeReady = true;
-      if (TARGET === 'zplayer') setupTouchControls();
-      else {
-        // TODO: better way to hide touch controls (just don't render them?)
+      if (TARGET === 'zplayer') {
+        setupTouchControls();
+      } else {
+        // The editor does not use the player's virtual gamepad controls.
         for (const el of [...document.querySelectorAll('.touch-inputs')]) {
           el.classList.toggle('hidden', true);
         }
+        if (TARGET === 'zeditor') setupEditorTouch();
       }
       setupCopyUrl();
       setupSettingsPanel();
@@ -729,6 +731,93 @@ function setupTouchControls() {
     touchInputsEl.addEventListener('touchcancel', e => touchFn('touchend', e));
     touchInputsEl.addEventListener('contextmenu', e => e.preventDefault());
   }
+}
+
+
+function setupEditorTouch() {
+  // Translate direct touch / pen input into the mouse events the existing
+  // ZQuest editor already understands. This keeps the editor engine unchanged.
+  canvas.style.touchAction = 'none';
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  let activePointer = null;
+
+  const mouseEvent = (type, e, buttons) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = Math.max(rect.left, Math.min(e.clientX, rect.right));
+    const clientY = Math.max(rect.top, Math.min(e.clientY, rect.bottom));
+    canvas.dispatchEvent(new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX,
+      clientY,
+      screenX: e.screenX,
+      screenY: e.screenY,
+      button: 0,
+      buttons,
+    }));
+  };
+
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || activePointer !== null) return;
+    e.preventDefault();
+    activePointer = e.pointerId;
+    canvas.setPointerCapture?.(e.pointerId);
+    mouseEvent('mousemove', e, 0);
+    mouseEvent('mousedown', e, 1);
+  }, {passive: false});
+
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerId !== activePointer) return;
+    e.preventDefault();
+    mouseEvent('mousemove', e, 1);
+  }, {passive: false});
+
+  const release = e => {
+    if (e.pointerId !== activePointer) return;
+    e.preventDefault();
+    mouseEvent('mousemove', e, 1);
+    mouseEvent('mouseup', e, 0);
+    canvas.releasePointerCapture?.(e.pointerId);
+    activePointer = null;
+  };
+  canvas.addEventListener('pointerup', release, {passive: false});
+  canvas.addEventListener('pointercancel', release, {passive: false});
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'editor-touch-toolbar';
+  toolbar.setAttribute('aria-label', 'Editor controls');
+
+  const sendShortcut = (key, code, opts = {}) => {
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      key,
+      code,
+      ctrlKey: !!opts.ctrlKey,
+      shiftKey: !!opts.shiftKey,
+    };
+    document.dispatchEvent(new KeyboardEvent('keydown', init));
+    document.dispatchEvent(new KeyboardEvent('keyup', init));
+  };
+
+  const actions = [
+    ['Undo', () => sendShortcut('z', 'KeyZ', {ctrlKey: true})],
+    ['Redo', () => sendShortcut('Z', 'KeyZ', {ctrlKey: true, shiftKey: true})],
+    ['Save', () => sendShortcut('s', 'KeyS', {ctrlKey: true})],
+    ['Test', () => document.querySelector('.button--open-testmode')?.click()],
+  ];
+
+  for (const [label, action] of actions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    toolbar.append(button);
+  }
+
+  document.querySelector('.content')?.before(toolbar);
 }
 
 function setupCopyUrl() {
