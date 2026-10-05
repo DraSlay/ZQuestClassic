@@ -231,3 +231,49 @@ canvas {
   height: max(40vh, 300px);
   image-rendering: pixelated;
 }
+
+
+/* Touch-first editor controls. Intentionally simple: large targets, no desktop redesign. */
+.editor-touch-toolbar {
+  display: none;
+}
+
+@media only screen and (hover: none), (pointer: coarse) {
+  body.canvas-focus:has(.editor-touch-toolbar) {
+    overflow: hidden;
+  }
+
+  .editor-touch-toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: #181818;
+    border-bottom: 1px solid #444;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+
+  .editor-touch-toolbar button {
+    min-width: 110px;
+    min-height: 52px;
+    padding: 8px 18px;
+    background: #2a2a2a;
+    border: 1px solid #666;
+    border-radius: 8px;
+    font: 600 20px sans-serif;
+    touch-action: manipulation;
+  }
+
+  .editor-touch-toolbar button:active {
+    background: #444;
+  }
+
+  canvas {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
