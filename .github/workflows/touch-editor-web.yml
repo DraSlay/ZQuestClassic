@@ -45,6 +45,11 @@ jobs:
           cmake --build build
           echo "UNSF=$PWD/build/unsf-static" >> $GITHUB_ENV
 
+      - name: Configure git for Emscripten patches
+        run: |
+          git config --global user.email "zquest-touch-build@example.invalid"
+          git config --global user.name "ZQuest Touch Build"
+
       - name: Configure web build
         run: bash scripts/configure_emscripten.sh
 
