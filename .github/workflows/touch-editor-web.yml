@@ -1,0 +1,93 @@
+name: Touch Editor Web Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  web:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /usr/local/share/powershell /usr/share/swift \
+            /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          df -h /
+
+      - name: Install cmake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.31.6'
+
+      - name: git clone
+        uses: connorjclark/action-cached-lfs-checkout@3ea4dc59b06f3baa8c01ba891fbfc2dbfdce5bc8
+        with:
+          fetch-depth: 0
+          enableCrossOsArchive: true
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "6.0.6"
+          actions-cache-folder: "emsdk-cache-${{ runner.os }}-${{ runner.arch }}"
+
+      - name: Install Node.js 22.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22.x
+
+      - run: npm ci --ignore-scripts
+        working-directory: vscode-extension
+      - run: npm run check-zscript-grammar
+        working-directory: vscode-extension
+
+      - run: npm add mime-types
+      - run: npm rm puppeteer && npm add puppeteer@25.2.1
+
+      - run: sudo apt-get update && sudo apt-get install ccache ninja-build flex bison
+
+      - name: ccache cache files
+        uses: actions/cache@v5
+        with:
+          path: .ccache
+          key: web-ccache-v2-${{ github.run_id }}
+          restore-keys: web-ccache-v2-
+      - run: ccache -z
+
+      - run: |
+          git clone https://github.com/psi29a/unsf.git
+          cd unsf
+          cmake -S . -B build .
+          cmake --build build
+          echo "UNSF=$PWD/build/unsf-static" >> $GITHUB_ENV
+
+      - run: |
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+
+      - run: bash scripts/configure_emscripten.sh
+        env:
+          ZC_EMCC_CMAKE_EXTRA_FLAGS: -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Add swap space
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 16G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
+      - name: Build ZQuest web editor
+        run: cmake --build build_emscripten --config RelWithDebInfo -t web
+
+      - run: ccache -s
+
+      - name: Upload runnable touch editor
+        uses: actions/upload-artifact@v7
+        with:
+          name: zquest-touch-editor-web
+          path: build_emscripten/RelWithDebInfo/
+          if-no-files-found: error
+          retention-days: 14
