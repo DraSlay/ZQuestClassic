@@ -35,12 +35,10 @@ EMCC_FLAGS=(
   -s USE_FREETYPE=1
   -s USE_SDL=2
   -s USE_SDL_MIXER=2
-  -pthread
   -msse2 -msimd128 -mssse3
   -I "$EMCC_CACHE_INCLUDE_DIR/AL"
 )
 LINKER_FLAGS=(
-  --shared-memory
   -s STACK_SIZE=5MB
   -s DEFAULT_PTHREAD_STACK_SIZE=2MB
   -s EXPORTED_RUNTIME_METHODS=cwrap,wasmMemory
@@ -51,7 +49,6 @@ LINKER_FLAGS=(
   -s SDL2_MIXER_FORMATS="['mid']"
   -s INITIAL_MEMORY=200MB
   -s ALLOW_MEMORY_GROWTH=1
-  -s PTHREAD_POOL_SIZE=15
   # Necessary to avoid a deadlock. Bisected to here:
   # https://chromium.googlesource.com/external/github.com/emscripten-core/emscripten.git/+log/1a0b77c572ad..c48f73a5c763
   -s EXIT_RUNTIME=1
@@ -136,7 +133,7 @@ emcmake cmake \
   -D WANT_OPENAL=OFF \
   -D WANT_ALSA=OFF \
   -D SDL2_INCLUDE_DIR="$EMCC_CACHE_INCLUDE_DIR" \
-  -D SDL2_LIBRARY="$EMCC_CACHE_LIB_DIR/libSDL2-mt.a" \
+  -D SDL2_LIBRARY="$EMCC_CACHE_LIB_DIR/libSDL2.a" \
   -D CMAKE_C_FLAGS_RELEASE="${CMAKE_CXX_FLAGS_RELEASE[*]}" \
   -D CMAKE_CXX_FLAGS_RELEASE="${CMAKE_CXX_FLAGS_RELEASE[*]}" \
   -D CMAKE_EXE_LINKER_FLAGS_RELEASE="${CMAKE_EXE_LINKER_FLAGS_RELEASE[*]}" \
@@ -151,7 +148,7 @@ emcmake cmake \
 
 # TODO: can this be removed?
 # Manually delete libraries from Emscripten cache to force a rebuild.
-rm -rf "$EMCC_CACHE_LIB_DIR"/libSDL2-mt.a "$EMCC_CACHE_LIB_DIR"/libSDL2.a
+rm -rf "$EMCC_CACHE_LIB_DIR"/libSDL2.a
 rm -rf "$EMCC_CACHE_LIB_DIR"/libSDL2_mixer_mid.a
 # This would work except you can't clear port variants.
 # https://github.com/emscripten-core/emscripten/issues/16744
@@ -160,7 +157,7 @@ rm -rf "$EMCC_CACHE_LIB_DIR"/libSDL2_mixer_mid.a
 bash ../web/patches/apply.sh
 
 # TODO: why doesn't emscripten build this for us?
-embuilder build sdl2-mt
+embuilder build sdl2
 embuilder build sdl2_mixer_mid
 
 echo "
