@@ -34,7 +34,7 @@ jobs:
           repository: DraSlay/ZQuestClassic
           run-id: 37395181362
 
-      - name: Enable threaded WASM on GitHub Pages
+      - name: Patch static host isolation and editor diagnostics
         shell: bash
         run: |
           cat > site/packages/web/coi-sw.js <<'EOF'
@@ -57,54 +57,9 @@ jobs:
             })());
           });
           EOF
-          python3 - <<'PY'
-          from pathlib import Path
-          for rel in ('create/index.html', 'play/index.html'):
-              p = Path('site/packages/web') / rel
-              text = p.read_text()
-              old = "navigator.serviceWorker.register('../sw.js');"
-              new = """let zcIsolationReloading = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                  if (!crossOriginIsolated && !zcIsolationReloading) {
-                    zcIsolationReloading = true;
-                    location.reload();
-                  }
-                });
-                navigator.serviceWorker.register('../coi-sw.js');"""
-              if old not in text:
-                  raise SystemExit(f'expected service worker registration not found in {p}')
-              p.write_text(text.replace(old, new))
-          PY
 
-          python3 - <<'PY'
-          from pathlib import Path
-
-          js = Path('site/packages/web/zeditor.js')
-          text = js.read_text()
-          old_pool = 'var pthreadPoolSize=15;'
-          if old_pool not in text:
-              raise SystemExit('expected pthread pool size not found')
-          text = text.replace(old_pool, 'var pthreadPoolSize=4;', 1)
-
-          old_add = 'runDependencies++;Module["monitorRunDependencies"]?.(runDependencies)'
-          new_add = 'runDependencies++;globalThis.__zcDep?.("add",id,runDependencies);Module["monitorRunDependencies"]?.(runDependencies)'
-          old_remove = 'runDependencies--;Module["monitorRunDependencies"]?.(runDependencies)'
-          new_remove = 'runDependencies--;globalThis.__zcDep?.("remove",id,runDependencies);Module["monitorRunDependencies"]?.(runDependencies)'
-          old_ready = 'case 3:onFinishedLoading(worker);break;'
-          new_ready = 'case 3:globalThis.__zcWorkerReady?.();onFinishedLoading(worker);break;'
-          for old, new in ((old_add,new_add),(old_remove,new_remove),(old_ready,new_ready)):
-              if old not in text:
-                  raise SystemExit(f'expected zeditor.js marker not found: {old}')
-              text = text.replace(old, new, 1)
-          js.write_text(text)
-
-          html = Path('site/packages/web/create/index.html')
-          page = html.read_text()
-          marker = '  <script src="../main.js"></script>'
-          if marker not in page:
-              raise SystemExit('main.js script marker not found')
-
-          diag = r'''  <script>
+          cat > /tmp/zc-diag.html <<'EOF'
+          <script>
             (() => {
               const deps = new Set();
               const logs = [];
@@ -114,6 +69,7 @@ jobs:
               const safe = value => {
                 try { return String(value); } catch { return '[unprintable]'; }
               };
+
               const render = () => {
                 if (!box) return;
                 const status = document.getElementById('status')?.textContent?.trim() || '(none)';
@@ -162,8 +118,51 @@ jobs:
               });
             })();
           </script>
-'''
-          html.write_text(page.replace(marker, diag + marker, 1))
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for rel in ('create/index.html', 'play/index.html'):
+              p = Path('site/packages/web') / rel
+              text = p.read_text()
+              old = "navigator.serviceWorker.register('../sw.js');"
+              new = """let zcIsolationReloading = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                  if (!crossOriginIsolated && !zcIsolationReloading) {
+                    zcIsolationReloading = true;
+                    location.reload();
+                  }
+                });
+                navigator.serviceWorker.register('../coi-sw.js');"""
+              if old not in text:
+                  raise SystemExit(f'expected service worker registration not found in {p}')
+              p.write_text(text.replace(old, new))
+
+          js = Path('site/packages/web/zeditor.js')
+          text = js.read_text()
+          replacements = (
+              ('var pthreadPoolSize=15;', 'var pthreadPoolSize=4;'),
+              ('runDependencies++;Module["monitorRunDependencies"]?.(runDependencies)',
+               'runDependencies++;globalThis.__zcDep?.("add",id,runDependencies);Module["monitorRunDependencies"]?.(runDependencies)'),
+              ('runDependencies--;Module["monitorRunDependencies"]?.(runDependencies)',
+               'runDependencies--;globalThis.__zcDep?.("remove",id,runDependencies);Module["monitorRunDependencies"]?.(runDependencies)'),
+              ('case 3:onFinishedLoading(worker);break;',
+               'case 3:globalThis.__zcWorkerReady?.();onFinishedLoading(worker);break;'),
+          )
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'expected zeditor.js marker not found: {old}')
+              text = text.replace(old, new, 1)
+          js.write_text(text)
+
+          html = Path('site/packages/web/create/index.html')
+          page = html.read_text()
+          marker = '  <script src="../main.js"></script>'
+          if marker not in page:
+              raise SystemExit('main.js script marker not found')
+          diag = Path('/tmp/zc-diag.html').read_text()
+          html.write_text(page.replace(marker, diag + '\n' + marker, 1))
           PY
 
       - name: Configure GitHub Pages
