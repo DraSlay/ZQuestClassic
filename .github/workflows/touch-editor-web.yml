@@ -1,7 +1,9 @@
 name: Touch Editor Web Build
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - touch-editor-singlethread
 
 jobs:
   web:
@@ -80,14 +82,14 @@ jobs:
           free -h
 
       - name: Build ZQuest web editor
-        run: cmake --build build_emscripten --config RelWithDebInfo -t web
+        run: cmake --build build_emscripten --config RelWithDebInfo -t web_zeditor
 
       - run: ccache -s
 
       - name: Upload runnable touch editor
         uses: actions/upload-artifact@v7
         with:
-          name: zquest-touch-editor-web
+          name: zquest-touch-editor-singlethread
           path: build_emscripten/RelWithDebInfo/
           if-no-files-found: error
           retention-days: 14
