@@ -76,6 +76,96 @@ jobs:
               p.write_text(text.replace(old, new))
           PY
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          js = Path('site/packages/web/zeditor.js')
+          text = js.read_text()
+          old_pool = 'var pthreadPoolSize=15;'
+          if old_pool not in text:
+              raise SystemExit('expected pthread pool size not found')
+          text = text.replace(old_pool, 'var pthreadPoolSize=4;', 1)
+
+          old_add = 'runDependencies++;Module["monitorRunDependencies"]?.(runDependencies)'
+          new_add = 'runDependencies++;globalThis.__zcDep?.("add",id,runDependencies);Module["monitorRunDependencies"]?.(runDependencies)'
+          old_remove = 'runDependencies--;Module["monitorRunDependencies"]?.(runDependencies)'
+          new_remove = 'runDependencies--;globalThis.__zcDep?.("remove",id,runDependencies);Module["monitorRunDependencies"]?.(runDependencies)'
+          old_ready = 'case 3:onFinishedLoading(worker);break;'
+          new_ready = 'case 3:globalThis.__zcWorkerReady?.();onFinishedLoading(worker);break;'
+          for old, new in ((old_add,new_add),(old_remove,new_remove),(old_ready,new_ready)):
+              if old not in text:
+                  raise SystemExit(f'expected zeditor.js marker not found: {old}')
+              text = text.replace(old, new, 1)
+          js.write_text(text)
+
+          html = Path('site/packages/web/create/index.html')
+          page = html.read_text()
+          marker = '  <script src="../main.js"></script>'
+          if marker not in page:
+              raise SystemExit('main.js script marker not found')
+
+          diag = r'''  <script>
+            (() => {
+              const deps = new Set();
+              const logs = [];
+              let workers = 0;
+              let box;
+
+              const safe = value => {
+                try { return String(value); } catch { return '[unprintable]'; }
+              };
+              const render = () => {
+                if (!box) return;
+                const status = document.getElementById('status')?.textContent?.trim() || '(none)';
+                box.textContent =
+                  'ZQuest boot diagnostic\n' +
+                  'isolated=' + crossOriginIsolated +
+                  '  SharedArrayBuffer=' + (typeof SharedArrayBuffer !== 'undefined') +
+                  '  cores=' + (navigator.hardwareConcurrency || '?') + '\n' +
+                  'pthread workers=' + workers + '/4\n' +
+                  'pending deps=' + ([...deps].join(', ') || '(none)') + '\n' +
+                  'status=' + status +
+                  (logs.length ? '\n' + logs.slice(-4).join('\n') : '');
+              };
+
+              globalThis.__zcDep = (op, id) => {
+                if (op === 'add') deps.add(id);
+                else deps.delete(id);
+                render();
+              };
+              globalThis.__zcWorkerReady = () => { workers++; render(); };
+              globalThis.__zcLog = msg => { logs.push(safe(msg)); render(); };
+
+              addEventListener('error', e => {
+                logs.push('ERROR: ' + safe(e.message || e.error));
+                render();
+              });
+              addEventListener('unhandledrejection', e => {
+                logs.push('PROMISE: ' + safe(e.reason));
+                render();
+              });
+
+              addEventListener('DOMContentLoaded', () => {
+                box = document.createElement('pre');
+                box.id = 'zc-boot-diag';
+                Object.assign(box.style, {
+                  position: 'fixed', left: '8px', right: '8px', bottom: '8px',
+                  zIndex: '2147483647', maxHeight: '35vh', overflow: 'auto',
+                  margin: '0', padding: '8px', background: 'rgba(0,0,0,.88)',
+                  color: '#fff', border: '1px solid #888', borderRadius: '6px',
+                  font: '12px/1.35 monospace', whiteSpace: 'pre-wrap',
+                  pointerEvents: 'none'
+                });
+                document.body.append(box);
+                render();
+                setInterval(render, 500);
+              });
+            })();
+          </script>
+'''
+          html.write_text(page.replace(marker, diag + marker, 1))
+          PY
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
