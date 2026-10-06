@@ -1,9 +1,7 @@
 name: Touch Editor Web Build
 
 on:
-  push:
-    branches:
-      - touch-editor-build
+  workflow_dispatch:
 
 jobs:
   web:
