@@ -40,7 +40,7 @@ EMCC_FLAGS=(
 )
 LINKER_FLAGS=(
   -s STACK_SIZE=5MB
-  -s DEFAULT_PTHREAD_STACK_SIZE=2MB
+
   -s EXPORTED_RUNTIME_METHODS=cwrap,wasmMemory
   -s IMPORTED_MEMORY=1
   -s FORCE_FILESYSTEM=1
@@ -58,7 +58,7 @@ LINKER_FLAGS=(
   -lproxyfs.js
   -lembind
   -lwebsocket.js
-  -pthread
+
 )
 EMCC_AND_LINKER_FLAGS=(
   # Error when using -fwasm-exceptions:
