@@ -1,0 +1,49 @@
+name: Deploy Touch Editor Pages
+
+on:
+  push:
+    branches:
+      - touch-editor-build
+    paths:
+      - .github/workflows/deploy-touch-editor-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: touch-editor-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download successful touch editor artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: zquest-touch-editor-web
+          path: site
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: DraSlay/ZQuestClassic
+          run-id: 37395181362
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/packages/web
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
